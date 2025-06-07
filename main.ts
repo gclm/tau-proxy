@@ -1,5 +1,5 @@
 // ========================================================================
-// Deno 代理脚本 (main.ts) - 请将此完整代码块复制到您的 main.ts 文件中
+// 【修复版】Deno 代理脚本 (main.ts) - 请将此完整代码块复制到您的 main.ts 文件中
 // ========================================================================
 
 /**
@@ -97,8 +97,8 @@ function tauLineToOpenAIChunk(
         } catch (e) {
             console.error("Failed to parse JSON from e/d prefix:", content, e);
         }
-    } else if (prefix === '8' || prefix === null) {
-        // Ignore usage chunks (8) or lines without prefix for now
+    } else if (['8', '9', 'a', 'b', 'f', '3'].includes(prefix || '') || prefix === null) {
+        // Ignore known but unhandled prefixes and null prefixes
         return { sse: null, isDone: false };
     } else {
         console.warn("Received unknown Tau stream prefix:", prefix);
@@ -171,22 +171,37 @@ async function handleChatCompletions(request: Request): Promise<Response> {
     }
 
     let modelAdded = false;
+    // ================== FIX STARTS HERE ==================
     const tauRequestMessages = reqBody.messages.map((msg: any) => {
-        const tauMessage: any = {
+        const baseMessage = {
             id: generateId("msg_"),
-            content: "",
             role: msg.role,
-            parts: (typeof msg.content === 'string') ? [{ type: "text", text: msg.content }] : [],
             metadata: {},
             createdAt: new Date().toISOString(),
         };
 
-        if (!modelAdded && msg.role === 'user') {
-             tauMessage.model = tauModel;
-             modelAdded = true;
+        if (msg.role === 'assistant') {
+            // Assistant message format
+            return {
+                ...baseMessage,
+                content: msg.content || "", // Use the actual content from history
+                parts: [], // Assistant messages should have empty parts
+            };
+        } else {
+            // User (and other roles) message format
+            const userMessage: any = {
+                ...baseMessage,
+                content: "", // User messages have empty content
+                parts: (typeof msg.content === 'string') ? [{ type: "text", text: msg.content }] : [],
+            };
+            if (!modelAdded && msg.role === 'user') {
+                userMessage.model = tauModel;
+                modelAdded = true;
+            }
+            return userMessage;
         }
-        return tauMessage;
     });
+    // ================== FIX ENDS HERE ==================
 
     const tauRequestBody = {
         id: generateId("bld_"),
@@ -248,19 +263,17 @@ async function handleChatCompletions(request: Request): Promise<Response> {
             headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
         });
     } else {
-        // Non-streaming logic can be added here if needed, but we focus on streaming
         return new Response(JSON.stringify({ error: "Non-streaming not implemented in this version" }), { status: 400 });
     }
 }
 
 // --- Main Request Handler Dispatcher with CORS ---
 async function handler(request: Request): Promise<Response> {
-    // Handle CORS preflight requests
     if (request.method === "OPTIONS") {
         return new Response(null, {
             status: 204,
             headers: {
-                "Access-Control-Allow-Origin": "*", // Allow any origin
+                "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type, Authorization",
             },
@@ -281,9 +294,8 @@ async function handler(request: Request): Promise<Response> {
         response = new Response("Not Found", { status: 404 });
     }
 
-    // Clone the response to add CORS headers
     const newHeaders = new Headers(response.headers);
-    newHeaders.set("Access-Control-Allow-Origin", "*"); // Allow any origin
+    newHeaders.set("Access-Control-Allow-Origin", "*");
     newHeaders.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
     newHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
