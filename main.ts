@@ -253,19 +253,45 @@ async function handleChatCompletions(request: Request): Promise<Response> {
     }
 }
 
-// --- Main Request Handler Dispatcher ---
+// --- Main Request Handler Dispatcher with CORS ---
 async function handler(request: Request): Promise<Response> {
+    // Handle CORS preflight requests
+    if (request.method === "OPTIONS") {
+        return new Response(null, {
+            status: 204,
+            headers: {
+                "Access-Control-Allow-Origin": "*", // Allow any origin
+                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            },
+        });
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
+    let response: Response;
+
     if (method === "GET" && path === "/v1/models") {
-        return handleListModels();
+        response = handleListModels();
     } else if (method === "POST" && path === "/v1/chat/completions") {
-        return handleChatCompletions(request);
+        response = await handleChatCompletions(request);
     } else {
-        return new Response("Not Found", { status: 404 });
+        response = new Response("Not Found", { status: 404 });
     }
+
+    // Clone the response to add CORS headers
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set("Access-Control-Allow-Origin", "*"); // Allow any origin
+    newHeaders.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    newHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+    });
 }
 
 // --- Start Server ---
