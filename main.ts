@@ -48,7 +48,7 @@ console.warn("TAU_API_KEY environment variable is not set. Requests to Tau API m
 
 /** Generates a UUID with a prefix for OpenAI-like IDs */
 function generateId(prefix: string = ""): string {
-return ${prefix}${crypto.randomUUID().replace(/-/g, '')};
+return `${prefix}${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 /** Generates a current timestamp in seconds */
