@@ -134,8 +134,7 @@ function handleListModels(): Response {
     const models = ALLOWED_TAU_MODELS.map(modelName => ({
         id: modelName,
         object: "model",
-        created: getCurrentTimestamp(),
-        owned_by: "tau-proxy",
+        created: getCurrentTimestamp()
     }));
 
     const responseBody = {
